@@ -11,13 +11,11 @@
 
 import sys
 import os
-import ConfigParser
+import configparser
 import getopt
-import output
 import re
 import pickle
 import string
-import sets
 import datetime
 import random
 
@@ -29,15 +27,15 @@ fullLog = ''
 rerun = ''
 
 def exception (errMsg):
-    print '\n!!! ERROR: ' + errMsg
+    print('\n!!! ERROR: ' + errMsg)
     sys.exit(9)
 
 def printHelp():
-    print "  glcu - "+output.bold("g")+"entoo "+output.bold("l")+"inux "+output.bold("c")+"ron "+output.bold("u")+"pdate"
-    print "       a program to keep your gentoo linux up to date!"
-    print "       see: http://glcu.sourceforge.net/ for more information\n"
-    print "                 ( Version" , VERSION , ")\n"
-    print '''USAGE (for the easy update feature):
+    print("  glcu - gentoo linux cron update")
+    print("       a program to keep your gentoo linux up to date!")
+    print("       see: http://glcu.sourceforge.net/ for more information\n")
+    print("                 ( Version" , VERSION , ")\n")
+    print('''USAGE (for the easy update feature):
     
   glcu [-a(A)|-h|-r(R)|-v] <update-file>
       -a: run glcu in automatic mode (don't ask anything) | or not: -A
@@ -50,7 +48,7 @@ def printHelp():
   * You can adjust the complete behaviour of glcu by editing
   * the config file: /etc/glcu.conf
       
-'''
+''')
 
     sys.exit(0)
 
@@ -64,12 +62,12 @@ def ask(question,standardAnswer,*packageCount):
     elif (standardAnswer == False):
         answerOption = ' [N/y]'
 
-    print "\n " + question + answerOption 
+    print("\n " + question + answerOption) 
     if (packageCount):
         what = packageCount[1]
-        print "    (or you can either install only specified " + what + " number(s) #,\n     or NOT install " + what + " with -# and use i# for injecting)"
-    print "\n >" ,
-    extraAnswer = raw_input()
+        print("    (or you can either install only specified " + what + " number(s) #,\n     or NOT install " + what + " with -# and use i# for injecting)")
+    print("\n >", end=' ')
+    extraAnswer = input()
     extraAnswer.lower()
     if (extraAnswer == ''):
         return standardAnswer
@@ -86,7 +84,7 @@ def ask(question,standardAnswer,*packageCount):
         
         __answers = extraAnswer.split()
         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging:  only in /etc/glcu.conf for verbosity = 3 
-            print "answers: " , __answers
+            print("answers: " , __answers)
 
         for singleAnswer in __answers:
             if (re.match('i\d+',singleAnswer)):
@@ -104,9 +102,9 @@ def ask(question,standardAnswer,*packageCount):
                     exception(what + " number does not exist: " + str(singleAnswer))
                 __install.append(singleAnswer)
         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging:  only in /etc/glcu.conf for verbosity = 3 
-            print "inject: " , __inject
-            print "remove: " , __remove
-            print "install: " , __install
+            print("inject: " , __inject)
+            print("remove: " , __remove)
+            print("install: " , __install)
 
         if ((len(__remove) > 0) and (len(__install) > 0)):
             exception("You can't specify packages to install and remove (# and -#).")
@@ -155,7 +153,12 @@ class GlcuConfig:
 
     def __readConfigFile(self,runas):
         global filename
-        filename = '/etc/glcu.conf'
+        if (os.path.isfile('/etc/glcu.conf') == 1):
+       	    filename = '/etc/glcu.conf'
+        elif (os.path.isfile('glcu.conf') == 1):
+            filename = 'glcu.conf'
+        else:
+            exception("Can't find your config file")
         if (runas == 'cron' and len(sys.argv) == 2):
             if (os.path.isfile(sys.argv[1]) == 1):
                 filename = sys.argv[1]
@@ -163,7 +166,7 @@ class GlcuConfig:
                 rerun = random.randint(1,100)
             else:
                 exception('You probably misspelled the config file in the rerunconfig option: ' + sys.argv[1])
-        configFile = ConfigParser.ConfigParser()
+        configFile = configparser.ConfigParser()
         configFile.readfp(open(filename))
         pairs = configFile.items('default')
         for pair in pairs:
@@ -175,10 +178,10 @@ class GlcuConfig:
             self.setMainConfig(boolkey,booloption)
             
         if (int(self.getMainConfig('verbosity')) > 2): # debugging:  only in /etc/glcu.conf for verbosity = 3 
-            print "\nFrom __readConfigFile:"
-            for key in self.__mainConfig.keys():
-                print "  " + key + ":" , self.__mainConfig[key]
-            print
+            print("\nFrom __readConfigFile:")
+            for key in list(self.__mainConfig.keys()):
+                print("  " + key + ":" , self.__mainConfig[key])
+            print()
 
         if (self.getMainConfig('rerunconfig') == filename):
             exception('rerunconfig option is set to the actual config file.\n This would cause indefinite recursion.')
@@ -230,10 +233,10 @@ class GlcuConfig:
 
         #debugging only
         if (int(self.getMainConfig('verbosity')) > 2):
-            print "\nFrom __readCommandLineOptions:"
-            for key in self.__mainConfig.keys():
-                print "  " + key + ":" , self.__mainConfig[key] 
-            print
+            print("\nFrom __readCommandLineOptions:")
+            for key in list(self.__mainConfig.keys()):
+                print("  " + key + ":" , self.__mainConfig[key]) 
+            print()
 
 
 
@@ -245,19 +248,19 @@ class ShellExecution:
              __outName = mainConfig.getMainConfig('tmpdir') + '/glcu-out.' + str(os.getpid()) + str(random.randint(1,10000))
         self.shellCommand = inputCommand + ' >' + __outName + ' 2>&1'
         if (int(mainConfig.getMainConfig('verbosity')) > 2): #debugging
-            print "shellExecution:" , ":" , self.shellCommand
-        self.__oldumask = os.umask(077)
+            print("shellExecution:" , ":" , self.shellCommand)
+        self.__oldumask = os.umask(0o77)
         self.__exitStatus = os.system(self.shellCommand)/256    
         
-        __o = file(__outName,'r')
+        __o = open(__outName,'r')
         self.__output = __o.read()
         __o.close()
         os.remove(__outName)
         
         
         if (int(mainConfig.getMainConfig('verbosity')) > 2): #debugging
-            print "Output:" , self.__output
-            print "exit status:" , self.__exitStatus
+            print("Output:" , self.__output)
+            print("exit status:" , self.__exitStatus)
             
  
 
@@ -288,7 +291,7 @@ class CronOutput:
         self.__hostname = False
         
         
-        getHostname = ShellExecution('grep HOSTNAME /etc/conf.d/hostname')
+        getHostname = ShellExecution('grep hostname /etc/conf.d/hostname')
         if (getHostname.getExitStatus() == 0 ):
             fileHostname = re.findall("\"(.+)\"",getHostname.getOutput())
             self.__hostname = '('  + str(fileHostname[0]) + ')'
@@ -307,9 +310,9 @@ class CronOutput:
             self.__addErrorAppendix(self.package,packageOutput)
             
         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only    
-            print "AddErrorPackages:" , self.__packageError
-            print "AddDependencyPackages:" , self.__packageDependency
-            print "AddSuccessPackages:" , self.__packageSuccess
+            print("AddErrorPackages:" , self.__packageError)
+            print("AddDependencyPackages:" , self.__packageDependency)
+            print("AddSuccessPackages:" , self.__packageSuccess)
 
             
     def addExistingPackage(self,package):
@@ -343,10 +346,10 @@ class CronOutput:
         if (len(self.__packageDependency) > 0) or (len(self.__packageError) > 0):
             dumpPackages.append(mainConfig.getMainConfig('update'))
         
-        tempFile = file(self.__fileName,'w')
+        tempFile = open(self.__fileName,'wb')
         pickle.dump(dumpPackages,tempFile)
         tempFile.close()
-        os.chmod(self.__fileName,0600)
+        os.chmod(self.__fileName,0o600)
     
     def writeMail(self):
     
@@ -367,10 +370,10 @@ class CronOutput:
         
         if (int(mainConfig.getMainConfig('verbosity')) > 1):
             if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only    
-                print "Length of FullLog:" , len(fullLog)
+                print("Length of FullLog:" , len(fullLog))
             if ( len(fullLog) > 500000 ):
                 logVar = 70*"=" + "\n\n\nFull logs:\n" +70*"=" + "\n" + fullLog
-                logfile = file(logfilename,'w')
+                logfile = open(logfilename,'w')
                 logfile.write(logVar)
                 logfile.close()
                 logToFile = 1
@@ -380,19 +383,19 @@ class CronOutput:
             message = message + "\n\n\nPrebuilding new Packages:\n" + 70*"-" + "\n"
             
             for package in self.__packageBlocks:
-                message = message + string.ljust(package,57) + "BLOCK!\n"
+                message = message + str.ljust(package,57) + "BLOCK!\n"
             
             for package in self.__packageSuccess:
-                message = message + string.ljust(package,57) + "success\n"
+                message = message + str.ljust(package,57) + "success\n"
     
             for package in self.__packageExists:
-                message = message + string.ljust(package,57) + "existing\n"
+                message = message + str.ljust(package,57) + "existing\n"
                 
             for package in self.__packageDependency:
-                message = message + string.ljust(package,57) + "dependencies*\n"
+                message = message + str.ljust(package,57) + "dependencies*\n"
     
             for package in self.__packageError:
-                message = message + string.ljust(package,57) + "ERROR**\n"
+                message = message + str.ljust(package,57) + "ERROR**\n"
     
             message = message + 70*"-" + "\n"
             if (len(self.__packageDependency) > 0):
@@ -424,13 +427,14 @@ class CronOutput:
     def __eMail(self,subject,body):
         # The core eMail function
         mailFile = mainConfig.getMainConfig('tmpdir') + '/glcuMail' + str(os.getpid()) 
-        mailBody = file(mailFile,'w')
+        mailBody = open(mailFile,'w')
         mailBody.write(body)
         mailBody.close()
-        mailcommand = '/bin/cat ' + mailFile + '|/bin/mail -s "' + subject + '" ' + mainConfig.getMainConfig('email')
+        # mailcommand = '/bin/cat ' + mailFile + '| sendmail -s "' + subject + '" ' + mainConfig.getMainConfig('email')
+        mailcommand = '/bin/echo -e "SUBJECT:' + subject + '\n" | /bin/cat - ' + mailFile + '| /usr/sbin/sendmail ' + mainConfig.getMainConfig('email')
         mailObject = ShellExecution(mailcommand)
         if (mailObject.getExitStatus() > 0):
-            mailBody = file(mailFile,'a')
+            mailBody = open(mailFile,'a')
             mailBody.write('ERROR while sending eMail:\n--------------------------\n\n' + mailObject.getOutput())
             mailBody.close()
             sys.exit(100)
@@ -438,7 +442,7 @@ class CronOutput:
             os.remove(mailFile)
             
         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-            print "--> sending mail to: " + mainConfig.getMainConfig('email')
+            print("--> sending mail to: " + mainConfig.getMainConfig('email'))
         
 
 
@@ -448,7 +452,7 @@ def cronExecution ():
     global mainConfig
     mainConfig = GlcuConfig('cron')
     if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-        print "cronExecution: " , sys.argv
+        print("cronExecution: " , sys.argv)
 
     #initialize mail object:
     mail = CronOutput()        
@@ -471,7 +475,7 @@ def cronExecution ():
             sys.exit(1)
         else:
             mail.earlyErrorMail('Update config file!',"Important message from glcu:\n============================\n\n  Edit the glcu config file '/etc/glcu.conf' to suit your needs!\n  Otherwise glcu won't work.")
-            nO = file('/tmp/glcuConfigNotUpdated','w')
+            nO = open('/tmp/glcuConfigNotUpdated','w')
             nO.write("edit '/etc/glcu' and delete this file!")
             nO.close()
             
@@ -504,16 +508,16 @@ def cronExecution ():
     # 3.a) run eupdatedb 
 
     if (mainConfig.getMainConfig('eupdatedb')):
-        eupdatedb = ShellExecution('/usr/sbin/eupdatedb')
+        eupdatedb = ShellExecution('/usr/bin/eupdatedb')
         if (eupdatedb.getExitStatus() != 0):
             mail.earlyErrorMail('eupdatedb failed','Error log for eupdatedb:\n\n' + eupdatedb.getOutput())
 
-    # 3.b) run update-eix 
+    # 3.b) run eix-update
 
     if (mainConfig.getMainConfig('updateix')):
-        eupdatedb = ShellExecution('/usr/bin/update-eix')
+        eupdatedb = ShellExecution('/usr/bin/eix-update')
         if (eupdatedb.getExitStatus() != 0):
-            mail.earlyErrorMail('update-eix failed','Error log for update-eix:\n\n' + eupdatedb.getOutput())
+            mail.earlyErrorMail('eix-update failed','Error log for eix-update:\n\n' + eupdatedb.getOutput())
             
             
     # 4. check for security updates (if wanted)
@@ -532,7 +536,7 @@ def cronExecution ():
             mail.earlyErrorMail('Problem during glsa-check --list',checkSecurity.getOutput())
         secPackages = re.findall(" \[N\].*?\(\s(.*?)\s\)",checkSecurity.getOutput())
         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-            print 'secPackages: ' , secPackages
+            print('secPackages: ' , secPackages)
         for secPackage in secPackages:
             if (re.search("\s",secPackage)):
                 severalPackages = re.split("\s",secPackage)
@@ -541,15 +545,15 @@ def cronExecution ():
                     if (singlePackage != '...'):
                         secPackages.append(singlePackage)
                 if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only        
-                    print 'secPackage: ' , secPackage
-                    print 'severalPackages: ' , severalPackages
+                    print('secPackage: ' , secPackage)
+                    print('severalPackages: ' , severalPackages)
     
         secPackages.reverse()
         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-            print "glsa-package count: " , len(secPackages) 
-            print "glsa-package list: " , secPackages
+            print("glsa-package count: " , len(secPackages)) 
+            print("glsa-package list: " , secPackages)
 
-    packageList = sets.Set(secPackages)
+    packageList = set(secPackages)
     
     # Only prebuilt security packages if they are installed:
     newSecPList = packageList.copy()
@@ -592,9 +596,9 @@ def cronExecution ():
     packageList.update(updateList)
     
     if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-        print 'Number of Packages:' , len(packageList)
-        print 'Packages:' , packageList
-        print 'Blocking Packages:' , blockList
+        print('Number of Packages:' , len(packageList))
+        print('Packages:' , packageList)
+        print('Blocking Packages:' , blockList)
         
     # 6. prebuilt all needed packages (security + system/world)
     
@@ -610,7 +614,7 @@ def cronExecution ():
     # get prebuilt packages in PKGDIR:
     prebuiltPackages = []
     if (os.path.isdir(pkgDir) == 0):
-        os.makedirs(pkgDir,0755)
+        os.makedirs(pkgDir,0o755)
     prebuiltDirList = os.listdir(pkgDir)
     for dirPackage in prebuiltDirList:
         prebuiltPackage = dirPackage.replace('.tbz2','')
@@ -626,7 +630,7 @@ def cronExecution ():
             rePrePackage = re.sub('\+','\+',prePackage)
             if (re.match(rePrePackage,prebuiltPackage)):
                 if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                    print "Removing package:" , package
+                    print("Removing package:" , package)
                 mail.addExistingPackage(package)
                 packageList.discard(package)
 
@@ -638,7 +642,7 @@ def cronExecution ():
             
         else:
             if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                print 'no packages to update. Exiting...'
+                print('no packages to update. Exiting...')
             sys.exit(0)    
 
         
@@ -649,7 +653,7 @@ def cronExecution ():
         checkDep = ShellExecution(dependencyCheckCommand)
         if (len(re.findall("\[ebuild|\[blocks",checkDep.getOutput())) != 1):
             if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                print "Removing package:" , depPackage
+                print("Removing package:" , depPackage)
             mail.addPackage(depPackage,-1,checkDep.getOutput())
             packageList.discard(depPackage)
             
@@ -672,14 +676,14 @@ def cronExecution ():
             
 
     if (int(mainConfig.getMainConfig('verbosity')) > 2):
-        print "\ncronExecution finished!\n\n"
+        print("\ncronExecution finished!\n\n")
     
 def manualExecution ():
     # load configuration:
     global mainConfig
     mainConfig = GlcuConfig('manual')
     if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-        print "*** manualExecution: " , sys.argv[0]
+        print("*** manualExecution: " , sys.argv[0])
 
     # check if glcu was started as root
     if (os.getuid() != 0):
@@ -694,7 +698,7 @@ def manualExecution ():
     
             # 1. load update file
         
-            updateFile = file(updateFilename,'r')
+            updateFile = open(updateFilename,'rb')
             updates = pickle.load(updateFile)
             updateFile.close()
     
@@ -709,13 +713,13 @@ def manualExecution ():
                     extra = False
             rmUpdates = updates[:]
             
-            print "\n" + "*"*40
-            print ">> Welcome to glcu's easy update feature\n"            
+            print("\n" + "*"*40)
+            print(">> Welcome to glcu's easy update feature\n")            
 
             # 2.a) Check for a portage update
             for portageCheck in updates:
                 if (re.match('sys-apps/portage-',portageCheck)):
-                    print "\nThere is an update for portage available,\nit is recommended to update it first."
+                    print("\nThere is an update for portage available,\nit is recommended to update it first.")
                     if (ask("Do you want to install the prebuilt portage package now?",True)):
                         updates.remove(portageCheck)
                         buildCommand = 'emerge --verbose --usepkgonly =' + portageCheck
@@ -725,7 +729,7 @@ def manualExecution ():
             # 3. install prebuilt packages
             if (len(updates) > 0):
                 if (mainConfig.getMainConfig('automatic') == False):
-                    print "\n\nPrebuilt packages:\n------------------"
+                    print("\n\nPrebuilt packages:\n------------------")
                     showPackages = ''
                     for uPackage in updates:
                         showPackages = showPackages + ' =' + uPackage
@@ -736,9 +740,9 @@ def manualExecution ():
                     showLines = re.findall('\[binary.*',showPrebuilt.getOutput())
                     i = 1
                     for showLine in showLines:
-                        print '(' ,
-                        print "%2i" % i,
-                        print ') ' + showLine
+                        print('(', end=' ')
+                        print("%2i" % i, end=' ')
+                        print(') ' + showLine)
                         i = i + 1
                     answer = ask('Do you want to install the prebuilt package(s)',True,len(updates),'package')
                     if (answer == True):
@@ -753,7 +757,7 @@ def manualExecution ():
                         pass
                     else:
                         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                            print "answer: " , answer
+                            print("answer: " , answer)
                         # 1. inject the wanted packages
                         if (len(answer[0]) > 0):
                             for injectPackage in answer[0]:
@@ -764,7 +768,7 @@ def manualExecution ():
                                 injectCheckExitStatus = os.system(injectCheckCommand)/256
                                 if (int(injectCheckExitStatus) != 0):
                                     if (os.path.isdir('/etc/portage/profile') == 0):
-                                        os.makedirs('/etc/portage/profile',0755)
+                                        os.makedirs('/etc/portage/profile',0o755)
                                     injectCommand = 'echo -e "\n' + updates[injectPackage] + '" >> /etc/portage/profile/package.provided'
                                     injectExitStatus = os.system(injectCommand)
                                 else:
@@ -772,7 +776,7 @@ def manualExecution ():
                                 
                         # 2. update list of updates and install
                         if (len(answer[1]) > 0):
-                            removeUpdates = sets.Set()
+                            removeUpdates = set()
                             for removePackage in answer[1]:
                                 removePackage = int(removePackage) - 1
                                 removeUpdates.add(updates[removePackage])
@@ -789,7 +793,7 @@ def manualExecution ():
                             updates = []
 
                         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                            print "updates: " , updates
+                            print("updates: " , updates)
                         if (len(updates) > 0):
                             rmUpdates = updates[:]
                             updatePackages = ''
@@ -837,12 +841,12 @@ def manualExecution ():
                 if (showSecurity.getExitStatus() == 0):
                     showLines = re.findall('200.*',showSecurity.getOutput())
                     glsas = re.findall('(\d+-\d+)',showSecurity.getOutput())
-                    print "glsa's: " , glsas
+                    print("glsa's: " , glsas)
                     i = 1
                     for showLine in showLines:
-                        print '(' ,
-                        print "%2i" % i,
-                        print ') ' + showLine
+                        print('(', end=' ')
+                        print("%2i" % i, end=' ')
+                        print(') ' + showLine)
                         i = i + 1
                     
                     glsaAnswer = ask("Do you want to fix all glsa's now?",True,len(showLines),'glsa')
@@ -853,7 +857,7 @@ def manualExecution ():
                         pass
                     else:
                         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                            print "glsaAnswer: " , glsaAnswer
+                            print("glsaAnswer: " , glsaAnswer)
                         # 1. inject the wanted packages
                         if (len(glsaAnswer[0]) > 0):
                             for injectPackage in glsaAnswer[0]:
@@ -864,7 +868,7 @@ def manualExecution ():
                                 
                         # 2. update list of updates and install
                         if (len(glsaAnswer[1]) > 0):
-                            removeGlsas = sets.Set()
+                            removeGlsas = set()
                             for removeGlsa in glsaAnswer[1]:
                                 removeGlsa = int(removeGlsa) - 1
                                 removeGlsas.add(glsas[removeGlsa])
@@ -882,7 +886,7 @@ def manualExecution ():
                             glsas = []
                             
                         if (int(mainConfig.getMainConfig('verbosity')) > 2): # debugging only
-                            print "glsa's: " , glsas
+                            print("glsa's: " , glsas)
                         if (len(glsas) > 0):
                             updateGlsa = ''
                             while (glsas):
@@ -909,11 +913,11 @@ def manualExecution ():
                     for packageName in rmUpdates:
                         packageShortName = re.sub('.*/','',packageName)
                         packagePath = pkgDir + packageShortName + '*.tbz2'
-                        print "removing " + packagePath
+                        print("removing " + packagePath)
                         os.system('rm ' + packagePath)
 
                         packageLnkPath =  infoDir[0] + '/' + packageName + '*.tbz2'
-                        print "removing " + packageLnkPath
+                        print("removing " + packageLnkPath)
                         os.system('rm ' + packageLnkPath) 
                         
             # 7. Ask to update the config files:
